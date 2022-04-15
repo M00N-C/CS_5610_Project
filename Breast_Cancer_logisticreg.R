@@ -33,7 +33,7 @@ nrow(data_all)
 
 
 ### Correlation plot for whole dataset 
-pairs(data_all[-1])
+#pairs(data_all[-1])
 findCorrelation(cor(data_all[-1]), cutoff = 0.75, names = TRUE)
 
 
@@ -47,23 +47,23 @@ test_all <- subset(data_all, split == "FALSE")
 
 
 ### Training model full model and summary output
-logistic_all <- glm(diagnosis ~ ., data=train_all, family="binomial")
-logistic_all
+logistic_full <- glm(diagnosis ~ ., data=train_all, family="binomial")
+logistic_full
 
-summary(logistic_all)
+summary(logistic_full)
 
 #Assessing Model Fit
 #We can compute McFadden's R2 for our model using the pR2 function from the pscl package.
 
-pR2(logistic_all)["McFadden"]
+pR2(logistic_full)["McFadden"]
 #A value of 0.9084415 is quite high for McFadden's R2, 
 #which indicates that our model fits the data very well and has high predictive power.
 
 #Variable Importance
-varImp(logistic_all, sort = TRUE)
+varImp(logistic_full, sort = TRUE)
 
 #calculate VIF values for each predictor variable in our model
-vif(logistic_all)
+vif(logistic_full)
 
 #we can assume that multicollinearity is an issue in our model. So, we have 
 #values above 5 indicate severe multicollinearity such that radius_worst and perimeter_worst.
@@ -74,6 +74,7 @@ threshold=4.99
 
 ### Sequentially drop the variable with the largest VIF until
 # all variables have VIF less than threshold
+logistic_all <- logistic_full
 drop=TRUE
 
 aftervif=data.frame()
@@ -104,6 +105,9 @@ predict_reg <- as.vector(predict_reg)
 
 
 ### Model Diagnostics
+# Diagnostics plots
+par(mfrow = c(2,2))
+plot(logistic_all, which = 1:4, main = "All Cancer Data")
 
 # ROC-AUC Curve
 ROCPred <- prediction(predict_reg, test_all$diagnosis)
@@ -115,6 +119,7 @@ auc <- auc@y.values[[1]]
 auc
 
 ### Plotting curve
+par(mfrow = c(1,1))
 plot(ROCPer, main = "ROC Curve for All Cancer Data")
 abline(a = 0, b = 1)
 auc <- round(auc, 4)
@@ -126,10 +131,10 @@ predict_reg <- factor(ifelse(predict_reg > 0.5, 1, 0),
                       labels = c("B", "M"))
 test_all$diagnosis <- factor(ifelse(test_all$diagnosis > 0.5, 1, 0),
                              labels = c("B", "M"))
-caret::confusionMatrix(test_all$diagnosis, predict_reg,
+all_confusion <- caret::confusionMatrix(test_all$diagnosis, predict_reg,
                        mode = 'everything',
                        positive = 'M')
-pR2(logistic_all)["McFadden"]
+all_r2 <- pR2(logistic_all)["McFadden"]
 
 
 
@@ -161,7 +166,7 @@ nrow(data_mean)
 
 
 ### Correlation plot for whole dataset 
-pairs(data_mean[-1])
+#pairs(data_mean[-1])
 findCorrelation(cor(data_mean[-1]), cutoff = 0.7, names = TRUE)
 
 
@@ -232,6 +237,9 @@ predict_reg <- as.vector(predict_reg)
 
 
 ### Model Diagnostics
+# Diagnostic plots
+par(mfrow = c(2,2))
+plot(logistic_mean, which = 1:4, main = "Mean Cancer Data")
 
 # ROC-AUC Curve
 ROCPred <- prediction(predict_reg, test_mean$diagnosis)
@@ -243,6 +251,7 @@ auc <- auc@y.values[[1]]
 auc
 
 ### Plotting curve
+par(mfrow = c(1,1))
 plot(ROCPer, main = "ROC Curve for Mean Cancer Data")
 abline(a = 0, b = 1)
 auc <- round(auc, 4)
@@ -254,10 +263,10 @@ predict_reg <- factor(ifelse(predict_reg > 0.5, 1, 0),
                       labels = c("B", "M"))
 test_mean$diagnosis <- factor(ifelse(test_mean$diagnosis > 0.5, 1, 0),
                              labels = c("B", "M"))
-caret::confusionMatrix(test_mean$diagnosis, predict_reg,
+mean_confusion<- caret::confusionMatrix(test_mean$diagnosis, predict_reg,
                        mode = 'everything',
                        positive = 'M')
-pR2(logistic_mean)["McFadden"]
+mean_r2 <- pR2(logistic_mean)["McFadden"]
 
 
 
@@ -289,7 +298,7 @@ nrow(data_worst)
 
 
 ### Correlation plot for whole dataset 
-pairs(data_worst[-1])
+#pairs(data_worst[-1])
 findCorrelation(cor(data_worst[-1]), cutoff = 0.7, names = TRUE)
 
 
@@ -360,6 +369,9 @@ predict_reg <- as.vector(predict_reg)
 
 
 ### Model Diagnostics
+# Diagnostic plots
+par(mfrow = c(2,2))
+plot(logistic_worst, which = 1:4, main = "Worst Cancer Data")
 
 # ROC-AUC Curve
 ROCPred <- prediction(predict_reg, test_worst$diagnosis)
@@ -371,6 +383,7 @@ auc <- auc@y.values[[1]]
 auc
 
 ### Plotting curve
+par(mfrow = c(1,1))
 plot(ROCPer, main = "ROC Curve for Worst Cancer Data")
 abline(a = 0, b = 1)
 auc <- round(auc, 4)
@@ -382,7 +395,23 @@ predict_reg <- factor(ifelse(predict_reg > 0.5, 1, 0),
                       labels = c("B", "M"))
 test_worst$diagnosis <- factor(ifelse(test_worst$diagnosis > 0.5, 1, 0),
                               labels = c("B", "M"))
-caret::confusionMatrix(test_worst$diagnosis, predict_reg,
+worst_confusion<- caret::confusionMatrix(test_worst$diagnosis, predict_reg,
                        mode = 'everything',
                        positive = 'M')
-pR2(logistic_worst)["McFadden"]
+worst_r2 <- pR2(logistic_worst)["McFadden"]
+
+
+
+
+
+
+
+### Total Model Comparisons
+all_confusion
+all_r2
+
+mean_confusion
+mean_r2
+
+worst_confusion
+worst_r2

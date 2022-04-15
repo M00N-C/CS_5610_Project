@@ -32,7 +32,8 @@ test_rf <- train(diagnosis ~., data = train_all, method = 'rf',
                  metric = 'Accuracy',
                  tuneGrid = tunegrid,
                  trControl = control)
-plot(test_rf)
+plot(test_rf, main = "CV Accuracy per Number of Included Predictors",
+     sub = "All Cancer Data")
 test_rf$bestTune
 
 ## building training model
@@ -47,7 +48,13 @@ cancer_all.pred <- predict(rf_all, newdata = test_all)
 confusionMatrix(cancer_all.pred, test_all$diagnosis,
                 mode = 'everything',
                 positive = 'M')
-varImpPlot(rf_all)
+varImpPlot(rf_all, main = "Variable Importance: All Cancer Data")
+
+
+
+
+
+
 
 
 
@@ -66,7 +73,8 @@ test_rf <- train(diagnosis ~., data = train_mean, method = 'rf',
                  metric = 'Accuracy',
                  tuneGrid = tunegrid,
                  trControl = control)
-plot(test_rf)
+plot(test_rf, main = "CV Accuracy per Number of Included Predictors",
+     sub = "Mean Cancer Data")
 test_rf$bestTune
 
 ## building training model
@@ -77,11 +85,20 @@ rf_mean <- randomForest(diagnosis ~., data = train_mean,
                        importance = TRUE)
 
 ## testing model, confusion matrix, plots
-cancer_all.pred <- predict(rf_mean, newdata = test_mean)
+cancer_mean.pred <- predict(rf_mean, newdata = test_mean)
 confusionMatrix(cancer_mean.pred, test_mean$diagnosis,
                 mode = 'everything',
                 positive = 'M')
-varImpPlot(rf_mean)
+varImpPlot(rf_mean, main = "Variable Importance: Mean Cancer Data")
+
+
+
+
+
+
+
+
+
 
 
 
@@ -99,7 +116,8 @@ test_rf <- train(diagnosis ~., data = train_worst, method = 'rf',
                  metric = 'Accuracy',
                  tuneGrid = tunegrid,
                  trControl = control)
-plot(test_rf)
+plot(test_rf, main = "CV Accuracy per Number of Included Predictors",
+     sub = "Worst Cancer Data")
 test_rf$bestTune
 
 ## building training model
@@ -115,5 +133,5 @@ confusionMatrix(cancer_worst.pred, test_worst$diagnosis,
                 mode = 'everything',
                 positive = 'M')
 
-varImpPlot(rf_worst)
+varImpPlot(rf_worst, main = "Variable Importance: Worst Cancer Data")
 

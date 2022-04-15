@@ -1,0 +1,39 @@
+---
+title: 'Breast Cancer Detection: Model Comparisons'
+author: "Corey Moon and Asma Mohammed Asiri"
+date: "4/14/2022"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Motivation and Overview
+
+
+# Background Work
+
+
+# Data
+
+
+## Data sorce
+
+
+## Dataset Features
+
+
+# Exploratory Data Analysis
+
+
+# Model Implementation
+
+
+# Discussion
+
+
+# Future Work and Limitations
+
+
+# References
