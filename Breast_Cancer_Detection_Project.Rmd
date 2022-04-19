@@ -1,8 +1,11 @@
 ---
 title: 'Breast Cancer Detection: Model Comparisons'
 author: "Corey Moon and Asma Mohammed Asiri"
-date: "4/14/2022"
-output: word_document
+date: "4/18/2022"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
 ---
 
 ```{r setup, include=FALSE}
@@ -11,29 +14,1312 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Motivation and Overview
 
+  Cancer is the second leading cause of death globally and is responsible for an estimated 9.6 million deaths in 2018. Globally, about 1 in 6 deaths are due to cancer. It is the leading cause of death in developed and developing countries, with projected annual deaths rising to 13.1 million by 2030. However, some forms of cancer, like breast cancer, have a higher chance of total remission if they are detected at an early stage and adequately treated. 
 
 # Background Work
 
+  Model comparison is a hot topic in the machine learning domain, as multiple models are often used on the same dataset to see how they differ in performance. Generally, there isn’t one model that dominates for any given type of data, some there are differences in interpretability and presentability between types of models. Some of the nuances of this topic are discussed [here](https://medium.com/@taniyaghosh29/machine-learning-algorithms-what-are-the-differences-9b71df4f248f) and [here](https://medium.com/@nischitasadananda/the-battle-between-logistic-regression-random-forest-classifier-xg-boost-and-support-vector-46d773c70f41), by authors Taniya and Nischitha Sadananda respectively.
 
 # Data
 
-
 ## Data sorce
-
+  The data used for our project sourced from the UC Irvine Machine Learning Repository, created by Dr. Mangasarian, Dr. Wolberg, and Dr. Street, which can be found [here](https://archive-beta.ics.uci.edu/ml/datasets/breast+cancer+wisconsin+diagnostic), and a description of their research can be found [here](https://pages.cs.wisc.edu/~olvi/uwmp/cancer.html#diag). 
 
 ## Dataset Features
+The covariates included are:
 
+  * Cell radius - mean distance from cell center to points on the perimeter
+  * Cell texture - standard deviation of grey-scale image values
+  * Perimeter
+  * Area
+  * Smoothness - Local variation in radius lengths
+  * Compactness - Defined as perimeter^2^ / Area - 1
+  * Concavity - Severity of concave portions of the cell contour
+  * Symmetry
+  * Fractal dimension - Defined as the coastline approximation - 1
 
 # Exploratory Data Analysis
+  The first step was to validate the dataset to ensure there were no missing values and remove any redundant information. The standard error columns were removed from the analysis since estimations would not likely provide any more meaningful insight that couldn’t be found from mean and worst-case columns.
+  
+##### Loading in packages  
+```{r warning = FALSE, message=FALSE}
+library(tidyverse)
+#install.packages("ggcorrplot")
+library(ggcorrplot)
+library(grid)
+library(gridExtra)
+```
+
+##### Formatting dataset for analysis
+```{r}
+#Loading dataset
+breast_cancer <- readxl::read_xlsx('Breast Cancer data - CS 5610.xlsx')
+
+#Removing id and standard error columns
+b_cancer <- breast_cancer[, -1]
+b_cancer <- b_cancer[, !grepl('_se', colnames(b_cancer))]
+colnames(b_cancer)
+colnames(b_cancer)[c(9, 19)] <- c("concave_points_mean", "concave_points_worst")
+
+#converting diagnosis to factor
+b_cancer$diagnosis <- b_cancer$diagnosis %>% as.factor()
+```
+
+##### Overview of formatted dataset
+```{r}
+dim(b_cancer)
+summary(b_cancer$diagnosis)
+any(is.na(b_cancer)) #No missing data
+```
+
+### Correlation and multicolinearity
+  Next the covariate matrix was checked for potential multicollinearity issues. There did appear to be several highly correlated covariates in the dataset that could impact model performance. Most of the highly correlated variables were related to radiuses, perimeters, and areas.
+```{r eval=FALSE}
+ggcorrplot(cor(b_cancer[-1]), type = 'lower', lab = TRUE) +
+  ggtitle("Correlation Plot of All Covariates") + 
+  theme(plot.title = element_text(hjust = 0.5, size = 22))
+```
+```{r}
+knitr::include_graphics(paste0(getwd(),"/Cancer_data_plots/correlation_plot.png"))
+```
+
+### Covariate Histograms
+  It also appears that there’s a variety of spread for each covariate, ranging from extremely right skewed too moderately skewed, to normally distributed. Additionally, not all of the covariates share similar scales. Dissimilar data can sometimes impact model performance, and some models are more susceptible to performance loss than others.
+```{r eval=FALSE}
+ggplot(gather(b_cancer[,-1]), aes(x = value, color = key, fill = key)) +
+  geom_histogram(bins = 32) +
+  ggtitle("Covariates Used for Breast Cancer Diagnosis") +
+  xlab("Value") + ylab("Count") +
+  theme(plot.title = element_text(hjust = 0.5, size = 22)) +
+  facet_wrap(~key, scales = 'free_x')
+```
+```{r}
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/histograms_all_covariates.png"))
+```
+  Lastly, the dataset was split into mean and worst cases, and histograms were plotted by diagnosis (Benign or Malignant). This was done to identify any potential differences in frequencies by diagnosis.
+  
+```{r}
+#Plotting histograms of covariates grouped by diagnosis, for mean/worst
+hist <- list()
+for(i in names(b_cancer[,-1])){
+  hist[[i]] <- ggplot(data = b_cancer, aes_string(x = i,
+                   fill = "diagnosis")) +
+                   geom_histogram(position = 'identity', alpha = 0.8, bins = 32)     
+}
+```
+
+##### Plotting the worst cancer data
+```{r eval = FALSE}
+#Worst count covariates
+grep('worst', names(b_cancer[,-1]))
+grid.arrange(hist[[11]], hist[[12]], hist[[13]], hist[[14]], hist[[15]],
+                        hist[[16]], hist[[17]], hist[[18]], hist[[19]], hist[[20]],
+                        nrow = 4,
+                        top = textGrob("Worst Cancer Data",
+                                       gp = gpar(fontsize = 22, font = 2)))
+```
+```{r}
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/worst_histogram_by_diag.png"))
+```
+
+##### Plotting the mean cancer data
+```{r eval = FALSE}
+#Mean count covariates
+grep('mean', names(b_cancer[,-1]))
+grid.arrange(hist[[1]], hist[[2]], hist[[3]], hist[[4]], hist[[5]],
+                        hist[[6]], hist[[7]], hist[[8]], hist[[9]], hist[[10]],
+                        nrow = 4,
+                        top = textGrob("Mean Cancer Data",
+                                             gp = gpar(fontsize =22, font = 2)))
+```
+```{r}
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/mean_histogram_by diag.png"))
+```
+
+
+  These plots clearly show differences in the values for most of the covariates by diagnosis. Separations like these will be beneficial for classification model training for both accuracy and misclassification rates. The variables that do have clear separations are likely to be highly predictive of cancer diagnosis, too.
 
 
 # Model Implementation
 
+## Implementation steps
+Three different types of models were used for this analysis: logistic regression, random forests, and gradient boosting with XGBoost. Each were applied to the total dataset, just the mean cancer data, and just the worst cancer data. Each model generally followed these steps:
+
+* Loaded datasets and divided into 75/25 train-test split
+* Model specific data formatting
+* Subset selection or hyperparameter tuning
+* Final model summary
+* Test data prediction and analysis
+* Model diagnostics
+
+## Logistic Regression
+Logistic regression is a type of generalized linear model that works with binary response variables and can be easily interpreted. One of the benefits of the logistic regression is that it can identify the log-odds and odds ratios for covariates of interest. More information about logistic regression can be found [here](https://courses.lumenlearning.com/introstats1/chapter/introduction-to-logistic-regression/).
+
+### Loading packages
+
+```{r message = FALSE, warning = FALSE}
+### Installing necessary packages
+#install.packages("tidyverse")
+#install.packages("caTools") # For Logistic regression
+#install.packages("ROCR")	 # For ROC curve to evaluate model
+#install.packages("pscl")  # Model evaluation
+
+### Loading package
+library(plyr)
+library(tidyverse)
+library(caTools)
+library(ROCR)
+library(carData)
+library(caret)
+library(car)
+library(pscl)
+```
+
+### All Cancer Data
+
+##### Formatting data
+```{r results='hide'}
+###load dataset
+data_all <- readxl::read_xlsx("Breast Cancer data - CS 5610.xlsx")
+#remove ids and standard errors, setting diagnosis to factor variable
+# factor set 1 == "M", 0 == "B"
+data_all <- data_all[,-1]
+data_all <- data_all[, !grepl('_se', colnames(data_all))]
+colnames(data_all)[c(9, 19)] <- c("concave_points_mean", "concave_points_worst")
+data_all$diagnosis <- as.factor(data_all$diagnosis)
+data_all$diagnosis <- as.integer(data_all$diagnosis)-1
+```
+```{r}
+### Correlation plot for whole dataset 
+findCorrelation(cor(data_all[-1]), cutoff = 0.75, names = TRUE)
+
+# 14 variables that have at least one correlation above 0.75
+```
+
+##### Train-test split
+```{r}
+### Splitting dataset dividing data 75/25 split
+set.seed(99)
+split <- sample.split(data_all$diagnosis, SplitRatio = 0.75)
+
+train_all <- subset(data_all, split == "TRUE")
+test_all <- subset(data_all, split == "FALSE")
+```
+
+##### Full model
+```{r}
+### Training model full model and summary output
+logistic_full <- glm(diagnosis ~ ., data=train_all, family="binomial")
+pR2(logistic_full)["McFadden"]
+vif(logistic_full)
+```
+The full model appeared to fit the data well with a high McFadden R^2^ = `r pR2(logistic_full)["McFadden"]`, but it only had one significant coefficient, and coefficients had high variable inflation factors. 
+
+
+```{r message = FALSE, warning = FALSE}
+#we can assume that multicollinearity is an issue in our model. So, we have 
+#values above 5 indicate severe multicollinearity such that radius_worst and perimeter_worst.
+# Set a VIF threshold. All the variables having higher VIF than threshold
+#are dropped from the model
+threshold=4.99
+
+### Sequentially drop the variable with the largest VIF until
+# all variables have VIF less than threshold
+logistic_all <- logistic_full
+drop=TRUE
+
+aftervif=data.frame()
+while(drop==TRUE) {
+  vmodel=vif(logistic_all)
+  aftervif=rbind.fill(aftervif,as.data.frame(t(vmodel)))
+  if(max(vmodel)>threshold) {
+    logistic_all=update(logistic_all,as.formula(paste(".","~",".","-",names(which.max(vmodel))))) }
+  else { drop=FALSE }}
+```
+
+```{r}
+#Model after removing correlated Variables with their VIFs
+print(as.data.frame(vmodel))
+```
+
+##### Creating predictions
+```{r}
+### Use the Model to Make Predictions on test data
+# Predict test data, converting to 0 or 1 based on 0.5 cutoff value
+predict_reg <- predict(logistic_all, test_all, type = "response")
+predict_reg <- ifelse(predict_reg > 0.5, 1, 0)
+predict_reg <- as.vector(predict_reg)
+```
+
+##### Model diagnostics and evaluation
+```{r eval = FALSE}
+# Diagnostics plots
+par(mfrow = c(2,2))
+plot(logistic_all, which = 1:4, main = "All Cancer Data")
+
+### ROC-AUC Curve
+ROCPred <- prediction(predict_reg, test_all$diagnosis)
+ROCPer <- performance(ROCPred, measure = "tpr",
+                      x.measure = "fpr")
+
+auc <- performance(ROCPred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+
+### Plotting curve
+par(mfrow = c(1,1))
+plot(ROCPer, main = "ROC Curve for All Cancer Data")
+abline(a = 0, b = 1)
+auc <- round(auc, 4)
+legend(.6, .4, auc, title = "AUC", cex = 1)
+```
+```{r results='hide'}
+### Evaluating model accuracy
+predict_reg <- factor(ifelse(predict_reg > 0.5, 1, 0),
+                      labels = c("B", "M"))
+test_all$diagnosis <- factor(ifelse(test_all$diagnosis > 0.5, 1, 0),
+                             labels = c("B", "M"))
+all_confusion <- caret::confusionMatrix(test_all$diagnosis, predict_reg,
+                                        mode = 'everything',
+                                        positive = 'M')
+all_r2 <- pR2(logistic_all)["McFadden"]
+```
+
+
+### Mean Cancer Data
+Here is the same setup, but for just the data that includes mean cancer data.
+```{r results='hide', warning=FALSE, message= FALSE}
+###load dataset
+data_mean <- read.csv("breast_cancer_mean.csv")
+
+#r Setting diagnosis to factor variable: factor set 1 == "M", 0 == "B"
+data_mean$diagnosis <- as.factor(data_mean$diagnosis)
+data_mean$diagnosis <- as.integer(data_mean$diagnosis)-1
+
+### Summary of dataset in package
+summary(data_mean)
+nrow(data_mean)
+
+### Correlation plot for whole dataset 
+#pairs(data_mean[-1])
+findCorrelation(cor(data_mean[-1]), cutoff = 0.7, names = TRUE)
+
+### Splitting dataset dividing data 75/25 split
+set.seed(99)
+split <- sample.split(data_mean$diagnosis, SplitRatio = 0.75)
+head(split)
+
+train_mean <- subset(data_mean, split == "TRUE")
+test_mean <- subset(data_mean, split == "FALSE")
+
+### Training model full model and summary output
+logistic_mean <- glm(diagnosis ~ ., data=train_mean, family="binomial")
+logistic_mean
+summary(logistic_mean)
+
+#Assessing Model Fit
+#We can compute McFadden's R2 for our model using the pR2 function from the pscl package.
+
+pR2(logistic_mean)["McFadden"]
+#A value of 0.9084415 is quite high for McFadden's R2, 
+#which indicates that our model fits the data very well and has high predictive power.
+
+#Variable Importance
+varImp(logistic_mean, sort = TRUE)
+
+#calculate VIF values for each predictor variable in our model
+vif(logistic_mean)
+
+#we can assume that multicollinearity is an issue in our model. So, we have 
+#values above 5 indicate severe multicollinearity such that radius_worst and perimeter_worst.
+# Set a VIF threshold. All the variables having higher VIF than threshold
+#are dropped from the model
+threshold=4.99
+
+### Sequentially drop the variable with the largest VIF until
+# all variables have VIF less than threshold
+drop=TRUE
+
+aftervif=data.frame()
+while(drop==TRUE) {
+  vmodel=vif(logistic_mean)
+  aftervif=rbind.fill(aftervif,as.data.frame(t(vmodel)))
+  if(max(vmodel)>threshold) {
+    logistic_mean=update(logistic_mean,as.formula(paste(".","~",".","-",names(which.max(vmodel))))) }
+  else { drop=FALSE }}
+
+### How variables removed sequentially
+t_aftervif= as.data.frame(t(aftervif))
+```
+
+```{r}
+# Final (uncorrelated) variables with their VIFs
+print(as.data.frame(vmodel))
+
+### Use the Model to Make Predictions on test data
+# Predict test data, converting to 0 or 1 based on 0.5 cutoff value
+predict_reg <- predict(logistic_mean, test_mean, type = "response")
+predict_reg <- ifelse(predict_reg > 0.5, 1, 0)
+predict_reg <- as.vector(predict_reg)
+```
+
+```{r eval = FALSE}
+### Model Diagnostics
+# Diagnostic plots
+par(mfrow = c(2,2))
+plot(logistic_mean, which = 1:4, main = "Mean Cancer Data")
+
+# ROC-AUC Curve
+ROCPred <- prediction(predict_reg, test_mean$diagnosis)
+ROCPer <- performance(ROCPred, measure = "tpr",
+                      x.measure = "fpr")
+
+auc <- performance(ROCPred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+
+### Plotting curve
+par(mfrow = c(1,1))
+plot(ROCPer, main = "ROC Curve for Mean Cancer Data")
+abline(a = 0, b = 1)
+auc <- round(auc, 4)
+legend(.6, .4, auc, title = "AUC", cex = 1)
+```
+
+```{r result = 'hide'}
+### Evaluating model accuracy
+predict_reg <- factor(ifelse(predict_reg > 0.5, 1, 0),
+                      labels = c("B", "M"))
+test_mean$diagnosis <- factor(ifelse(test_mean$diagnosis > 0.5, 1, 0),
+                             labels = c("B", "M"))
+mean_confusion<- caret::confusionMatrix(test_mean$diagnosis, predict_reg,
+                       mode = 'everything',
+                       positive = 'M')
+mean_r2 <- pR2(logistic_mean)["McFadden"]
+```
+
+
+### Worst Cancer Data
+Here is the same setup, but for just the worst cancer data.
+```{r results='hide', warning=FALSE, message= FALSE}
+###load dataset
+data_worst <- read.csv("breast_cancer_worst.csv")
+
+#r Setting diagnosis to factor variable: factor set 1 == "M", 0 == "B"
+data_worst$diagnosis <- as.factor(data_worst$diagnosis)
+data_worst$diagnosis <- as.integer(data_worst$diagnosis)-1
+
+### Summary of dataset in package
+summary(data_worst)
+nrow(data_worst)
+
+### Correlation plot for whole dataset 
+#pairs(data_worst[-1])
+findCorrelation(cor(data_worst[-1]), cutoff = 0.7, names = TRUE)
+
+### Splitting dataset dividing data 75/25 split
+set.seed(99)
+split <- sample.split(data_worst$diagnosis, SplitRatio = 0.75)
+head(split)
+
+train_worst <- subset(data_worst, split == "TRUE")
+test_worst <- subset(data_worst, split == "FALSE")
+
+### Training model full model and summary output
+logistic_worst <- glm(diagnosis ~ ., data=train_worst, family="binomial")
+logistic_worst
+
+summary(logistic_worst)
+
+#Assessing Model Fit
+#We can compute McFadden's R2 for our model using the pR2 function from the pscl package.
+
+pR2(logistic_worst)["McFadden"]
+#A value of 0.9084415 is quite high for McFadden's R2, 
+#which indicates that our model fits the data very well and has high predictive power.
+
+#Variable Importance
+varImp(logistic_worst, sort = TRUE)
+
+#calculate VIF values for each predictor variable in our model
+vif(logistic_worst)
+
+#we can assume that multicollinearity is an issue in our model. So, we have 
+#values above 5 indicate severe multicollinearity such that radius_worst and perimeter_worst.
+# Set a VIF threshold. All the variables having higher VIF than threshold
+#are dropped from the model
+threshold=4.99
+
+
+### Sequentially drop the variable with the largest VIF until
+# all variables have VIF less than threshold
+drop=TRUE
+
+aftervif=data.frame()
+while(drop==TRUE) {
+  vmodel=vif(logistic_worst)
+  aftervif=rbind.fill(aftervif,as.data.frame(t(vmodel)))
+  if(max(vmodel)>threshold) {
+    logistic_worst=update(logistic_worst,as.formula(paste(".","~",".","-",names(which.max(vmodel))))) }
+  else { drop=FALSE }}
+
+#Model after removing correlated Variables
+summary(logistic_worst)
+vif(logistic_worst)
+
+
+### How variables removed sequentially
+t_aftervif= as.data.frame(t(aftervif))
+```
+
+```{r}
+# Final (uncorrelated) variables with their VIFs
+print(as.data.frame(vmodel))
+
+### Use the Model to Make Predictions on test data
+# Predict test data, converting to 0 or 1 based on 0.5 cutoff value
+predict_reg <- predict(logistic_worst, test_worst, type = "response")
+predict_reg <- ifelse(predict_reg > 0.5, 1, 0)
+predict_reg <- as.vector(predict_reg)
+```
+
+```{r eval = FALSE}
+### Model Diagnostics
+# Diagnostic plots
+par(mfrow = c(2,2))
+plot(logistic_worst, which = 1:4, main = "Worst Cancer Data")
+
+# ROC-AUC Curve
+ROCPred <- prediction(predict_reg, test_worst$diagnosis)
+ROCPer <- performance(ROCPred, measure = "tpr",
+                      x.measure = "fpr")
+
+auc <- performance(ROCPred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+
+### Plotting curve
+par(mfrow = c(1,1))
+plot(ROCPer, main = "ROC Curve for Worst Cancer Data")
+abline(a = 0, b = 1)
+auc <- round(auc, 4)
+legend(.6, .4, auc, title = "AUC", cex = 1)
+```
+
+```{r results='hide'}
+### Evaluating model accuracy
+predict_reg <- factor(ifelse(predict_reg > 0.5, 1, 0),
+                      labels = c("B", "M"))
+test_worst$diagnosis <- factor(ifelse(test_worst$diagnosis > 0.5, 1, 0),
+                              labels = c("B", "M"))
+worst_confusion<- caret::confusionMatrix(test_worst$diagnosis, predict_reg,
+                       mode = 'everything',
+                       positive = 'M')
+worst_r2 <- pR2(logistic_worst)["McFadden"]
+```
+
+
+## Random forest
+A random forest algorithm that uses ensemble learning for either regression or classification problems. A random forest establishes predictions based on the aggerate outcomes of multiple decision trees. Decision trees are intuitive, as they are similar to a heuristics like flow charts. Random forests rely on a majority-voting system, in which the final prediction is determined by the outcome that is consistent with the majority of the decision trees. That is, if a majority of the ensemble decision trees predicted “Yes”, the final random forests prediction would be the same. More information about random forests can be found [here](https://www.section.io/engineering-education/introduction-to-random-forest-in-machine-learning/).
+
+### Preping Data for Analysis
+```{r message=FALSE, warning=FALSE}
+#Loading required libraries
+library(tidyverse)
+library(randomForest)
+library(caTools)
+library(caret)
+
+#Loading datasets
+breast_cancer <- readxl::read_xlsx('Breast Cancer data - CS 5610.xlsx')
+cancer_mean   <- read.csv('breast_cancer_mean.csv')
+cancer_worst  <- read.csv('breast_cancer_worst.csv')
+
+#Removing SE columns and renaming two columns for cancer_all
+cancer_all    <- breast_cancer[, -1]
+cancer_all    <- cancer_all[, !grepl('_se', colnames(cancer_all))]
+colnames(cancer_all)[c(9, 19)] <- c("concave_points_mean", "concave_points_worst")
+
+#Setting 'diagnosis' to factor variable
+cancer_all$diagnosis   <- as.factor(cancer_all$diagnosis)
+cancer_mean$diagnosis  <- as.factor(cancer_mean$diagnosis)
+cancer_worst$diagnosis <- as.factor(cancer_worst$diagnosis)
+```
+
+### All Cancer Data
+##### Splitting dataset
+```{r}
+set.seed(99)
+sampl_all <- sample.split(cancer_all$diagnosis, SplitRatio = 0.75)
+train_all <- subset(cancer_all, sampl_all == TRUE)
+test_all  <- subset(cancer_all, sampl_all != TRUE)
+```
+
+##### Hyperparameter tuning and model training
+```{r}
+control <- trainControl(method = 'cv', number = 5, search = 'grid')
+tunegrid <- expand.grid(mtry = c(1:ncol(train_all)))
+set.seed(99)
+test_rf <- train(diagnosis ~., data = train_all, method = 'rf',
+                 metric = 'Accuracy',
+                 tuneGrid = tunegrid,
+                 trControl = control)
+
+test_rf$bestTune
+
+## building training model
+set.seed(99)
+rf_all <- randomForest(diagnosis ~., data = train_all, 
+                       ntree = 500,
+                       mtry = 20,
+                       importance = TRUE)
+```
+
+##### Model testing and visualizations
+```{r results='hide', fig.show='hide'}
+cancer_all_rf.pred <- predict(rf_all, newdata = test_all)
+confusionMatrix(cancer_all_rf.pred, test_all$diagnosis,
+                mode = 'everything',
+                positive = 'M')
+
+plot(test_rf, main = "CV Accuracy per Number of Included Predictors",
+     sub = "All Cancer Data")
+
+varImpPlot(rf_all, main = "Variable Importance: All Cancer Data")
+```
+
+### Mean Cancer Data
+##### Splitting dataset
+```{r}
+set.seed(99)
+sampl_mean <- sample.split(cancer_mean$diagnosis, SplitRatio = 0.75)
+train_mean <- subset(cancer_mean, sampl_mean == TRUE)
+test_mean  <- subset(cancer_mean, sampl_mean != TRUE)
+```
+
+##### Hyperparameter tuning and model training
+```{r}
+control <- trainControl(method = 'cv', number = 5, search = 'grid')
+tunegrid <- expand.grid(mtry = c(1:ncol(train_mean)))
+set.seed(99)
+test_rf <- train(diagnosis ~., data = train_mean, method = 'rf',
+                 metric = 'Accuracy',
+                 tuneGrid = tunegrid,
+                 trControl = control)
+
+test_rf$bestTune
+
+## building training model
+set.seed(99)
+rf_mean <- randomForest(diagnosis ~., data = train_mean, 
+                       ntree = 500,
+                       mtry = 8,
+                       importance = TRUE)
+```
+
+##### Model testing and visualizations
+```{r results='hide', fig.show='hide'}
+cancer_mean_rf.pred <- predict(rf_mean, newdata = test_mean)
+confusionMatrix(cancer_mean_rf.pred, test_mean$diagnosis,
+                mode = 'everything',
+                positive = 'M')
+
+plot(test_rf, main = "CV Accuracy per Number of Included Predictors",
+     sub = "Mean Cancer Data")
+
+varImpPlot(rf_mean, main = "Variable Importance: Mean Cancer Data")
+```
+
+### Worst Cancer Data
+##### Splitting dataset
+```{r}
+set.seed(99)
+sampl_worst <- sample.split(cancer_worst$diagnosis, SplitRatio = 0.75)
+train_worst <- subset(cancer_worst, sampl_worst == TRUE)
+test_worst  <- subset(cancer_worst, sampl_worst != TRUE)
+```
+
+##### Hyperparameter tuning and model training
+```{r}
+control <- trainControl(method = 'cv', number = 5, search = 'grid')
+tunegrid <- expand.grid(mtry = c(1:ncol(train_worst)))
+set.seed(99)
+test_rf <- train(diagnosis ~., data = train_worst, method = 'rf',
+                 metric = 'Accuracy',
+                 tuneGrid = tunegrid,
+                 trControl = control)
+
+test_rf$bestTune
+
+## building training model
+set.seed(99)
+rf_worst <- randomForest(diagnosis ~., data = train_worst,
+                         ntree = 500, 
+                         mtry = 10,
+                         importance = TRUE)
+```
+
+##### Model testing and visualizations
+```{r results='hide', fig.show='hide'}
+cancer_worst_rf.pred <- predict(rf_worst, newdata = test_worst)
+confusionMatrix(cancer_worst_rf.pred, test_worst$diagnosis,
+                mode = 'everything',
+                positive = 'M')
+
+plot(test_rf, main = "CV Accuracy per Number of Included Predictors",
+     sub = "Worst Cancer Data")
+
+varImpPlot(rf_worst, main = "Variable Importance: Worst Cancer Data")
+```
+
+
+## XGBoost
+XGBoost stands for “extreme gradient boosting”; it is an extension of gradient boosted decision trees that is optimized to improve speed and performance. In general, gradient boosting refers to iteratively fitting residuals of a loss function from the previous fitted model to the next fitted model. XGBoost is a recent library that uses a gradient boosted decision trees for classification problems, and gradient boosted generalized linear models for regression problems. More information about the XGBoost library can be found [here](https://medium.com/analytics-vidhya/introduction-to-xgboost-algorithm-d2e7fad76b04).
+
+### Preping Data for Analysis
+```{r warning=FALSE, message=FALSE}
+#Loading packages
+#install.packages('xgboost')
+library(xgboost)
+library(caret)
+library(caTools)
+library(tidyverse)
+library(pROC)
+
+#Loading datasets
+breast_cancer <- readxl::read_xlsx('Breast Cancer data - CS 5610.xlsx')
+cancer_mean   <- read.csv('breast_cancer_mean.csv')
+cancer_worst  <- read.csv('breast_cancer_worst.csv')
+
+#Removing SE columns and renaming two columns for cancer_all
+cancer_all    <- breast_cancer[, -1]
+cancer_all    <- cancer_all[, !grepl('_se', colnames(cancer_all))]
+colnames(cancer_all)[c(9, 19)] <- c("concave_points_mean", "concave_points_worst")
+
+#Setting 'diagnosis' to factor variable
+cancer_all$diagnosis   <- as.factor(cancer_all$diagnosis)
+cancer_mean$diagnosis  <- as.factor(cancer_mean$diagnosis)
+cancer_worst$diagnosis <- as.factor(cancer_worst$diagnosis)
+```
+
+### All Cancer Data
+##### Splitting into train/test data
+```{r}
+set.seed(99)
+sampl_all <- sample.split(cancer_all$diagnosis, SplitRatio = 0.75)
+train_all <- subset(cancer_all, sampl_all == TRUE)
+test_all  <- subset(cancer_all, sampl_all != TRUE)
+```
+
+##### Formatting data for XGBoost modeling
+```{r}
+## Creating the independent variable and label matricies of train/test data
+train_all_data  <- as.matrix(train_all[-1])
+train_all_label <- train_all$diagnosis
+## Converting labels to 0,1 where "M" is coded at 1
+train_all_label <- as.integer(train_all_label)-1
+train_all$diagnosis[1:5]; train_all_label[1:5]
+## Repeat for test dataset
+test_all_data   <- as.matrix(test_all[-1])
+test_all_label  <- test_all$diagnosis
+test_all_label  <- as.integer(test_all_label)-1
+test_all$diagnosis[1:5]; test_all_label[1:5]
+
+## Formatting data for XGBoost matricies
+all_dtrain <- xgb.DMatrix(data = train_all_data, label = train_all_label)
+all_dtest  <- xgb.DMatrix(data = test_all_data, label = test_all_label)
+```
+
+##### Hyperparameter tuning using random search
+```{r}
+### parameters: max_depth, eta, subsample, colsample_bytree, and min_child_weight
+all_low_err_list <- list()
+all_parameters_list <- list()
+set.seed(99)
+for(i in 1:3000){
+  params <- list(booster = "gbtree",
+                 objective = "binary:logistic",
+                 max_depth = sample(3:25, 1),
+                 eta = runif(1, 0.01, 0.3),
+                 subsample = runif(1, 0.5, 1),
+                 colsample_bytree = runif(1, 0.5, 1),
+                 min_child_weight = sample(0:10, 1)
+                )
+  
+  parameters <- as.data.frame(params)
+  all_parameters_list[[i]] <- parameters
+}
+
+all_parameters_df <- do.call(rbind, all_parameters_list) #df containing random search params
+
+### Fitting xgboost models based on search parameters
+for (row in 1:nrow(all_parameters_df)){
+  set.seed(99)
+  all_tmp_mdl <- xgb.cv(data = all_dtrain,
+                       booster = "gbtree",
+                       objective = "binary:logistic",
+                       nfold = 5,
+                       prediction = TRUE,
+                       max_depth = all_parameters_df$max_depth[row],
+                       eta = all_parameters_df$eta[row],
+                       subsample = all_parameters_df$subsample[row],
+                       colsample_bytree = all_parameters_df$colsample_bytree[row],
+                       min_child_weight = all_parameters_df$min_child_weight[row],
+                       nrounds = 200,
+                       eval_metric = "error",
+                       early_stopping_rounds = 20,
+                       print_every_n = 500,
+                       verbose = 0
+                    )
+  
+  #this is the lowest error for the iteration
+  all_low_err <- as.data.frame(1 - min(all_tmp_mdl$evaluation_log$test_error_mean))
+  all_low_err_list[[row]] <- all_low_err
+}
+
+all_low_err_df <- do.call(rbind, all_low_err_list) #accuracies 
+all_randsearch <- cbind(all_low_err_df, all_parameters_df) #data frame with everything
+
+###Reformatting the dataframe
+all_randsearch <- all_randsearch %>%
+  dplyr::rename(val_acc = '1 - min(all_tmp_mdl$evaluation_log$test_error_mean)') %>%
+  dplyr::arrange(-val_acc)
+
+###Grabbing just the top model
+all_randsearch_best <- all_randsearch[1,]
+
+###Storing best parameters in list
+all_best_params <- list(booster = all_randsearch_best$booster,
+                        objective = all_randsearch_best$objective,
+                        max_depth = all_randsearch_best$max_depth,
+                        eta = all_randsearch_best$eta,
+                        subsample = all_randsearch_best$subsample,
+                        colsample_bytree = all_randsearch_best$colsample_bytree,
+                        min_child_weight = all_randsearch_best$min_child_weight)
+```
+
+##### Hyperparameter tuning nround with 5-fold cross validation
+```{r results='hide'}
+### Finding the best nround parameter for the model using 5-fold cross validation
+set.seed(99)
+all_xgbcv <- xgb.cv(params = all_best_params,
+                    data = all_dtrain,
+                    nrounds = 500,
+                    nfold = 5,
+                    prediction = TRUE,
+                    print_every_n = 50,
+                    early_stopping_rounds = 25,
+                    eval_metric = "error",
+                    verbose = 0
+                    )
+all_xgbcv$best_iteration
+```
+
+##### Model training using best hyperparameters
+```{r}
+set.seed(99)
+all_best_xgb <- xgb.train(params = all_best_params,
+                          data = all_dtrain,
+                          nrounds = all_xgbcv$best_iteration,
+                          eval_metric = "error",
+                          )
+
+xgb.save(all_best_xgb, 'final_xgb_cancerall')
+```
+
+##### Model testing and visualizations
+```{r results='hide', fig.show='hide'}
+cancer_all.pred <- predict(all_best_xgb, all_dtest)
+cancer_all.pred <- factor(ifelse(cancer_all.pred > 0.5, 1, 0),
+                          labels = c("B", "M"))
+confusionMatrix(cancer_all.pred, test_all$diagnosis,
+                mode = 'everything',
+                positive = 'M')
+
+## Visualizations
+all_impt_mtx <- xgb.importance(feature_names = colnames(test_all_data), model = all_best_xgb)
+xgb.plot.importance(importance_matrix = all_impt_mtx,
+                      xlab = "Variable Importance")
+
+
+### ROC curve for 5-fold CV random parameter search
+all_randsearch_roc <- roc(response = train_all_label,
+                          predictor = all_tmp_mdl$pred,
+                          print.auc = TRUE,
+                          plot = TRUE)
+
+### ROC curve for 5-fold CV nround parameter search
+all_nround_roc <- roc(response = train_all_label,
+                          predictor = all_xgbcv$pred,
+                          print.auc = TRUE,
+                          plot = TRUE)
+```
+
+### Mean Cancer Data
+##### Splitting into train/test data
+```{r}
+set.seed(99)
+sampl_mean <- sample.split(cancer_mean$diagnosis, SplitRatio = 0.75)
+train_mean <- subset(cancer_mean, sampl_mean == TRUE)
+test_mean  <- subset(cancer_mean, sampl_mean != TRUE)
+```
+
+##### Formatting data for XGBoost modeling
+```{r}
+## Creating the independent variable and label matricies of train/test data
+train_mean_data  <- as.matrix(train_mean[-1])
+train_mean_label <- train_mean$diagnosis
+## Converting labels to 0,1 where "M" is coded at 1
+train_mean_label <- as.integer(train_mean_label)-1
+train_mean$diagnosis[1:5]; train_mean_label[1:5]
+## Repeat for test dataset
+test_mean_data   <- as.matrix(test_mean[-1])
+test_mean_label  <- test_mean$diagnosis
+test_mean_label  <- as.integer(test_mean_label)-1
+test_mean$diagnosis[1:5]; test_mean_label[1:5]
+
+## Formatting data for XGBoost matricies
+mean_dtrain <- xgb.DMatrix(data = train_mean_data, label = train_mean_label)
+mean_dtest  <- xgb.DMatrix(data = test_mean_data, label = test_mean_label)
+```
+
+##### Hyperparameter tuning using random search
+```{r}
+### parameters: max_depth, eta, subsample, colsample_bytree, and min_child_weight
+mean_low_err_list <- list()
+mean_parameters_list <- list()
+set.seed(99)
+for(i in 1:3000){
+  params <- list(booster = "gbtree",
+                 objective = "binary:logistic",
+                 max_depth = sample(3:25, 1),
+                 eta = runif(1, 0.01, 0.3),
+                 subsample = runif(1, 0.5, 1),
+                 colsample_bytree = runif(1, 0.5, 1),
+                 min_child_weight = sample(0:10, 1)
+  )
+  parameters <- as.data.frame(params)
+  mean_parameters_list[[i]] <- parameters
+}
+mean_parameters_df <- do.call(rbind, mean_parameters_list) #df containing random search params
+
+### Fitting xgboost models based on search parameters
+for (row in 1:nrow(mean_parameters_df)){
+  set.seed(99)
+  mean_tmp_mdl <- xgb.cv(data = mean_dtrain,
+                       booster = "gbtree",
+                       objective = "binary:logistic",
+                       nfold = 5,
+                       prediction = TRUE,
+                       max_depth = mean_parameters_df$max_depth[row],
+                       eta = mean_parameters_df$eta[row],
+                       subsample = mean_parameters_df$subsample[row],
+                       colsample_bytree = mean_parameters_df$colsample_bytree[row],
+                       min_child_weight = mean_parameters_df$min_child_weight[row],
+                       nrounds = 200,
+                       eval_metric = "error",
+                       early_stopping_rounds = 20,
+                       print_every_n = 500,
+                       verbose = 0
+                      ) 
+  
+  #this is the lowest error for the iteration
+  mean_low_err <- as.data.frame(1 - min(mean_tmp_mdl$evaluation_log$test_error_mean))
+  mean_low_err_list[[row]] <- mean_low_err
+}
+
+mean_low_err_df <- do.call(rbind, mean_low_err_list) #accuracies 
+mean_randsearch <- cbind(mean_low_err_df, mean_parameters_df) #data frame with everything
+
+###Reformatting the dataframe
+mean_randsearch <- mean_randsearch %>%
+  dplyr::rename(val_acc = '1 - min(mean_tmp_mdl$evaluation_log$test_error_mean)') %>%
+  dplyr::arrange(-val_acc)
+
+###Grabbing just the top model
+mean_randsearch_best <- mean_randsearch[1,]
+
+### Storing best parameters in list
+mean_best_params <- list(booster = mean_randsearch_best$booster,
+                         objective = mean_randsearch_best$objective,
+                         max_depth = mean_randsearch_best$max_depth,
+                         eta = mean_randsearch_best$eta,
+                         subsample = mean_randsearch_best$subsample,
+                         colsample_bytree = mean_randsearch_best$colsample_bytree,
+                         min_child_weight = mean_randsearch_best$min_child_weight)
+```
+
+##### Hyperparameter tuning nround with 5-fold cross validation
+```{r results='hide'}
+set.seed(99)
+mean_xgbcv <- xgb.cv(params = mean_best_params,
+                      data = mean_dtrain,
+                      nrounds = 500,
+                      nfold = 5,
+                      prediction = TRUE,
+                      print_every_n = 50,
+                      early_stopping_rounds = 25,
+                      eval_metric = "error",
+                      verbose = 0
+                      )
+mean_xgbcv$best_iteration
+```
+
+##### Model training using best hyperparameters
+```{r}
+set.seed(99)
+mean_best_xgb <- xgb.train(params = mean_best_params,
+                          data = mean_dtrain,
+                          nrounds = mean_xgbcv$best_iteration,
+                          eval_metric = "error",
+                          )
+
+xgb.save(mean_best_xgb, 'final_xgb_cancermean')
+```
+
+##### Model testing and visualizations
+```{r results='hide', fig.show='hide'}
+cancer_mean.pred <- predict(mean_best_xgb, mean_dtest)
+cancer_mean.pred <- factor(ifelse(cancer_mean.pred > 0.5, 1, 0),
+                          labels = c("B", "M"))
+
+## Visualizations
+mean_impt_mtx <- xgb.importance(feature_names = colnames(test_mean_data), model = mean_best_xgb)
+xgb.plot.importance(importance_matrix = mean_impt_mtx,
+                    xlab = "Variable Importance")
+
+### ROC curve for 5-fold CV random parameter search
+mean_randsearch_roc <- roc(response = train_mean_label,
+                            predictor = mean_tmp_mdl$pred,
+                            print.auc = TRUE,
+                            plot = TRUE)
+
+### ROC curve for 5-fold CV nround parameter search
+mean_nround_roc <- roc(response = train_mean_label,
+                            predictor = mean_xgbcv$pred,
+                            print.auc = TRUE,
+                            plot = TRUE)
+```
+
+
+
+### Worst Cancer Data
+##### Splitting into train/test data
+```{r}
+set.seed(99)
+sampl_worst <- sample.split(cancer_worst$diagnosis, SplitRatio = 0.75)
+train_worst <- subset(cancer_worst, sampl_worst == TRUE)
+test_worst  <- subset(cancer_worst, sampl_worst != TRUE)
+```
+
+##### Formatting data for XGBoost modeling
+```{r}
+## Creating the independent variable and label matricies of train/test data
+train_worst_data  <- as.matrix(train_worst[-1])
+train_worst_label <- train_worst$diagnosis
+## Converting labels to 0,1 where "M" is coded at 1
+train_worst_label <- as.integer(train_worst_label)-1
+train_worst$diagnosis[1:5]; train_worst_label[1:5]
+## Repeat for test dataset
+test_worst_data   <- as.matrix(test_worst[-1])
+test_worst_label  <- test_worst$diagnosis
+test_worst_label  <- as.integer(test_worst_label)-1
+test_worst$diagnosis[1:5]; test_worst_label[1:5]
+
+## Formatting data for XGBoost matricies
+worst_dtrain <- xgb.DMatrix(data = train_worst_data, label = train_worst_label)
+worst_dtest  <- xgb.DMatrix(data = test_worst_data, label = test_worst_label)
+```
+
+##### Hyperparameter tuning using random search
+```{r}
+### parameters: max_depth, eta, subsample, colsample_bytree, and min_child_weight
+worst_low_err_list <- list()
+worst_parameters_list <- list()
+set.seed(99)
+for(i in 1:3000){
+  params <- list(booster = "gbtree",
+                 objective = "binary:logistic",
+                 max_depth = sample(3:25, 1),
+                 eta = runif(1, 0.01, 0.3),
+                 subsample = runif(1, 0.5, 1),
+                 colsample_bytree = runif(1, 0.5, 1),
+                 min_child_weight = sample(0:10, 1)
+  )
+  parameters <- as.data.frame(params)
+  worst_parameters_list[[i]] <- parameters
+}
+worst_parameters_df <- do.call(rbind, worst_parameters_list) #df containing random search params
+
+### Fitting 5-fold CV xgboost models based on search parameters 
+for (row in 1:nrow(worst_parameters_df)){
+  set.seed(99)
+  worst_tmp_mdl <- xgb.cv(data = worst_dtrain,
+                       booster = "gbtree",
+                       objective = "binary:logistic",
+                       nfold = 5,
+                       prediction = TRUE,
+                       max_depth = worst_parameters_df$max_depth[row],
+                       eta = worst_parameters_df$eta[row],
+                       subsample = worst_parameters_df$subsample[row],
+                       colsample_bytree = worst_parameters_df$colsample_bytree[row],
+                       min_child_weight = worst_parameters_df$min_child_weight[row],
+                       nrounds = 200,
+                       eval_metric = "error",
+                       early_stopping_rounds = 20,
+                       print_every_n = 500,
+                       verbose = 0
+                       )
+                       
+  
+  #this is the lowest error for the iteration
+  worst_low_err <- as.data.frame(1 - min(worst_tmp_mdl$evaluation_log$test_error_mean))
+  worst_low_err_list[[row]] <- worst_low_err
+}
+
+worst_low_err_df <- do.call(rbind, worst_low_err_list) #accuracies 
+worst_randsearch <- cbind(worst_low_err_df, worst_parameters_df) #data frame with everything
+
+###Reformatting the dataframe
+worst_randsearch <- worst_randsearch %>%
+  dplyr::rename(val_acc = '1 - min(worst_tmp_mdl$evaluation_log$test_error_mean)') %>%
+  dplyr::arrange(-val_acc)
+
+###Grabbing just the top model
+worst_randsearch_best <- worst_randsearch[1,]
+
+### Storing best parameters in list
+worst_best_params <- list(booster = worst_randsearch_best$booster,
+                          objective = worst_randsearch_best$objective,
+                          max_depth = worst_randsearch_best$max_depth,
+                          eta = worst_randsearch_best$eta,
+                          subsample = worst_randsearch_best$subsample,
+                          colsample_bytree = worst_randsearch_best$colsample_bytree,
+                          min_child_weight = worst_randsearch_best$min_child_weight)
+```
+
+##### Hyperparameter tuning nround with 5-fold cross validation
+```{r results='hide'}
+set.seed(99)
+worst_xgbcv <- xgb.cv(params = worst_best_params,
+                    data = worst_dtrain,
+                    nrounds = 500,
+                    nfold = 5,
+                    prediction = TRUE, 
+                    print_every_n = 50,
+                    early_stopping_rounds = 25,
+                    eval_metric = "error",
+                    verbose = 0
+                    )
+worst_xgbcv$best_iteration
+```
+
+##### Model training using best hyperparameters
+```{r}
+set.seed(99)
+worst_best_xgb <- xgb.train(params = worst_best_params,
+                            data = worst_dtrain,
+                            nrounds = worst_xgbcv$best_iteration,
+                            eval_metric = "error"
+                            )
+xgb.save(worst_best_xgb, 'final_xgb_cancerworst')
+
+cancer_worst.pred <- predict(worst_best_xgb, worst_dtest)
+cancer_worst.pred <- factor(ifelse(cancer_worst.pred> 0.5, 1, 0),
+                          labels = c("B", "M"))
+
+```
+
+##### Model testing and visualizations
+```{r results='hide', fig.show='hide'}
+### variable importance plot
+worst_impt_mtx <- xgb.importance(feature_names = colnames(test_worst_data), model = worst_best_xgb)
+xgb.plot.importance(importance_matrix = worst_impt_mtx,
+                    xlab = "Variable Importance")
+
+### ROC curve for 5-fold CV random parameter search
+worst_randsearch_roc <- roc(response = train_worst_label,
+                           predictor = worst_tmp_mdl$pred,
+                           print.auc = TRUE,
+                           plot = TRUE)
+
+### ROC curve for 5-fold CV nround parameter search
+worst_nround_roc <- roc(response = train_worst_label,
+                           predictor = worst_xgbcv$pred,
+                           print.auc = TRUE,
+                           plot = TRUE)
+```
+
+
+
+
+# Results
+
+## Logistic Regression
+
+##### All cancer data
+```{r echo= FALSE}
+all_confusion
+
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/logistic_all_roc.png"))
+
+summary(logistic_all)
+pR2(logistic_all)["McFadden"]
+
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/logistic_all_diagnostic.png"))
+```
+
+##### Mean cancer data
+```{r echo=FALSE}
+mean_confusion
+
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/logistic_mean_roc.png"))
+
+summary(logistic_mean)
+pR2(logistic_mean)["McFadden"]
+
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/logistic_mean_diagnostic.png"))
+```
+
+##### Worst cacner data
+
+```{r echo=FALSE}
+worst_confusion
+
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/logistic_worst_roc.png"))
+
+summary(logistic_worst)
+pR2(logistic_worst)["McFadden"]
+
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/logistic_worst_diagnostic.png"))
+```
+
+## Random Forest
+
+##### All cancer data
+```{r echo = FALSE}
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/rf_cv_tune_plot_all.png"))
+
+confusionMatrix(cancer_all_rf.pred, test_all$diagnosis,
+                mode = 'everything',
+                positive = 'M')
+
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/rf vip plot_all.png"))
+```
+
+##### Mean cancer data
+```{r echo = FALSE}
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/rf_cv_tune_plot_mean.png"))
+
+confusionMatrix(cancer_mean_rf.pred, test_mean$diagnosis,
+                mode = 'everything',
+                positive = 'M')
+
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/rf vip plot_mean.png"))
+```
+
+##### Worst cacner data
+```{r echo = FALSE}
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/rf cv tune plot_worst.png"))
+
+confusionMatrix(cancer_worst_rf.pred, test_worst$diagnosis,
+                mode = 'everything',
+                positive = 'M')
+
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/rf vip plot_worst.png"))
+```
+
+
+## XGBoost
+
+##### All cancer data
+```{r echo = FALSE}
+confusionMatrix(cancer_all.pred, test_all$diagnosis,
+                mode = 'everything',
+                positive = 'M')
+
+#Variable Importance Plot
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/xgb all vip.png"))
+
+# ROC Curve for 5-fold Cross Validated Random Parameter Search
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/xgb all 5cv random search roc.png"))
+
+# ROC Curve for 5-fold Cross Validated nround Parameter Search
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/xgb all 5cv nround roc.png"))
+```
+
+##### Mean cacner data
+```{r echo = FALSE}
+confusionMatrix(cancer_mean.pred, test_mean$diagnosis,
+                mode = 'everything',
+                positive = 'M')
+
+# Variable Importance Plot
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/xgb mean vip.png"))
+
+# ROC Curve for 5-fold Cross Validated Random Parameter Search
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/xgb mean 5cv random search.png"))
+
+# ROC Curve for 5-fold Cross Validated nround Parameter Search
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/xgb mean 5cv nround.png"))
+```
+
+##### Worst cancer data
+```{r echo = FALSE}
+confusionMatrix(cancer_worst.pred, test_worst$diagnosis,
+                mode = 'everything',
+                positive = 'M')
+
+# Variable Importance Plot
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/xgb worst vip.png"))
+
+# ROC Curve for 5-fold Cross Validated Random Parameter Search
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/xgb worst 5cv random search.png"))
+
+# ROC Curve for 5-fold Cross Validated nround Parameter Search
+knitr::include_graphics(paste0(getwd(), "/Cancer_data_plots/xgb worst 5cv nround.png"))
+```
+
+
 
 # Discussion
 
+Since the main focus of this project was to identify the best model that could identify malignant breast cancer tumors, accuracy scores and false negative rates were emphasized. False negatives are a type of misclassification when the predicted value is negative even though the true value is positive. Although overall model accuracy is important for cancer diagnoses, incorrectly identifying a cancerous cell as benign can lead to more harm than incorrectly identifying a benign cell as cancerous.
 
-# Future Work and Limitations
+## Logistic Regression
+For logistic regression the model with the highest accuracy score  _(0.993)_ and lowest false negative rate _(Sensitivity = 1.000)_ was found when only looking at worst mean cancer data. The confusion matrix showed zero false negatives and one false positive. Combined with an _AUC = 0.991_, the model performed very well at classification. The model summary showed that all covariates except worst mean cell concavity and and worst mean cell symmetry were significant at an $\alpha $ = 0.05 level. Odd ratios for all covariates in the model could be calculated by exponentiating the coefficient estimates; for example, the odd ratio for the worst mean cell texture is `r exp(logistic_worst$coefficients[2])`. Meaning, that holding all other covariates constant, each additional increase in the standard deviation of grey-scale image values of the worst mean cells corresponded to a 30.7% increase in the odds of classifying the sample as malignant. A McFadden R^2^ of 0.867 indicated a good overall measure of model fit. The model diagnostics indicated that there were some outlier issues that could've influenced model performance.
+
+## Random Forest
+For random forests, the model with the highest accuracy score _(0.986)_ was found when only looking at worst mean cancer data. This model had two false negatives _(Sensitivity = 0.962)_ and zero false positives _(Specificity = 1)_. When hyperparameter tuning the model, it was found that including all ten covariates in each spit in the decision trees led to the highest training model accuracy. A variable importance plot indicated that the top three covariates that influenced model performance were the number of worst mean concave points, worst mean perimeter, and worst mean cell texture in that order.
+
+
+## XGBoost
+For the XGBoost algorithm, the model with the highest accuracy score _(0.986)_ and false negative rate _(Sensitivity = 0.962)_ was found when only looking at the worst mean cancer data. This model had 2 false negatives and 0 false positives _(Specificity = 1.00)_. A variance importance plot showed that the top three covariates that influenced the training model performance were cell radii, the number of concave points on the cell perimeters, and the perimeters themselves. ROC curves of the 5-fold cross validated hyperparameter searches had high AUC values _(AUC = 0.981, AUC = 0.984)_ indicated that the training model performed well at classification.
+
+## Cross Model Comparison
+Overall, the model that best classified cancer cells as benign or malignant was a logistic regression using different characteristics of worst average cell data. The XGBoost algorithm performed competitively, but had a lower sensitivity score than logistic regression. The results of logistic regression were easier to interpret compared to the results of XGBoost. An additional benefit of the logistic regression was that inferences on the covariates could also be made along side with the overall accuracy of the model.
+
+# Limitations and Future Work
+
+These models didn't include a validation set during the splitting process. A validation set would provide another subset of data to test the trained models. Although subset selection processes were used, feature engineering was not. All models used started with their full sets of covariates during model construction. In the future better domain knowledge could be used to assess which features would be most appropriate for the project problem. Model diagnostics of the logistic regression models indicated an outlier problem. There were at least two influential datum that impacted the assumptions of linear models. It should be determined if these points could be removed in the future, and see if their removal changes the results of logistic regression models. Although random forests and XGBoost should be more robust to outliers, all other models should be ran again with the new dataset to test for improvements.
 
 
 # References
+
+https://medium.com/@taniyaghosh29/machine-learning-algorithms-what-are-the-differences-9b71df4f248f
+
+https://medium.com/@nischitasadananda/the-battle-between-logistic-regression-random-forest-classifier-xg-boost-and-support-vector-46d773c70f41
+
+https://archive-beta.ics.uci.edu/ml/datasets/breast+cancer+wisconsin+diagnostic
+
+https://pages.cs.wisc.edu/~olvi/uwmp/cancer.html#diag
+
+https://courses.lumenlearning.com/introstats1/chapter/introduction-to-logistic-regression/
+
+https://www.section.io/engineering-education/introduction-to-random-forest-in-machine-learning/
+
+https://xgboost.readthedocs.io/en/stable/tutorials/model.html
+
+https://cran.r-project.org/web/packages/xgboost/xgboost.pdf
+
+https://towardsdatascience.com/getting-to-an-hyperparameter-tuned-xgboost-model-in-no-time-a9560f8eb54b

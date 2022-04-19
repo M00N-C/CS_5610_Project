@@ -97,8 +97,8 @@ all_randsearch <- cbind(all_low_err_df, all_parameters_df) #data frame with ever
 
 ###Reformatting the dataframe
 all_randsearch <- all_randsearch %>%
-  rename(val_acc = '1 - min(all_tmp_mdl$evaluation_log$test_error_mean)') %>%
-  arrange(-val_acc)
+  dplyr::rename(val_acc = '1 - min(all_tmp_mdl$evaluation_log$test_error_mean)') %>%
+  dplyr::arrange(-val_acc)
 
 ###Grabbing just the top model
 all_randsearch_best <- all_randsearch[1,]
@@ -153,16 +153,13 @@ xgb.plot.importance(importance_matrix = all_impt_mtx,
 all_randsearch_roc <- roc(response = train_all_label,
                           predictor = all_tmp_mdl$pred,
                           print.auc = TRUE,
-                          plot = TRUE
-)
+                          plot = TRUE)
 
 ### ROC curve for 5-fold CV nround parameter search
 all_nround_roc <- roc(response = train_all_label,
                           predictor = all_xgbcv$pred,
                           print.auc = TRUE,
-                          plot = TRUE
-)
-
+                          plot = TRUE)
 
 
 
@@ -244,8 +241,8 @@ mean_randsearch <- cbind(mean_low_err_df, mean_parameters_df) #data frame with e
 
 ###Reformatting the dataframe
 mean_randsearch <- mean_randsearch %>%
-  rename(val_acc = '1 - min(mean_tmp_mdl$evaluation_log$test_error_mean)') %>%
-  arrange(-val_acc)
+  dplyr::rename(val_acc = '1 - min(mean_tmp_mdl$evaluation_log$test_error_mean)') %>%
+  dplyr::arrange(-val_acc)
 
 ###Grabbing just the top model
 mean_randsearch_best <- mean_randsearch[1,]
@@ -301,15 +298,13 @@ xgb.plot.importance(importance_matrix = mean_impt_mtx,
 mean_randsearch_roc <- roc(response = train_mean_label,
                             predictor = mean_tmp_mdl$pred,
                             print.auc = TRUE,
-                            plot = TRUE
-)
+                            plot = TRUE)
 
 ### ROC curve for 5-fold CV nround parameter search
 mean_nround_roc <- roc(response = train_mean_label,
                             predictor = mean_xgbcv$pred,
                             print.auc = TRUE,
-                            plot = TRUE
-)
+                            plot = TRUE)
 
 
 
@@ -393,8 +388,8 @@ worst_randsearch <- cbind(worst_low_err_df, worst_parameters_df) #data frame wit
 
 ###Reformatting the dataframe
 worst_randsearch <- worst_randsearch %>%
-  rename(val_acc = '1 - min(worst_tmp_mdl$evaluation_log$test_error_mean)') %>%
-  arrange(-val_acc)
+  dplyr::rename(val_acc = '1 - min(worst_tmp_mdl$evaluation_log$test_error_mean)') %>%
+  dplyr::arrange(-val_acc)
 
 ###Grabbing just the top model
 worst_randsearch_best <- worst_randsearch[1,]
@@ -451,15 +446,13 @@ xgb.plot.importance(importance_matrix = worst_impt_mtx,
 worst_randsearch_roc <- roc(response = train_worst_label,
                            predictor = worst_tmp_mdl$pred,
                            print.auc = TRUE,
-                           plot = TRUE
-)
+                           plot = TRUE)
 
 ### ROC curve for 5-fold CV nround parameter search
 worst_nround_roc <- roc(response = train_worst_label,
                            predictor = worst_xgbcv$pred,
                            print.auc = TRUE,
-                           plot = TRUE
-)
+                           plot = TRUE)
 
 
 stop.time <- Sys.time()

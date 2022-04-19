@@ -109,7 +109,7 @@ predict_reg <- as.vector(predict_reg)
 par(mfrow = c(2,2))
 plot(logistic_all, which = 1:4, main = "All Cancer Data")
 
-# ROC-AUC Curve
+### ROC-AUC Curve
 ROCPred <- prediction(predict_reg, test_all$diagnosis)
 ROCPer <- performance(ROCPred, measure = "tpr",
                       x.measure = "fpr")
@@ -132,17 +132,9 @@ predict_reg <- factor(ifelse(predict_reg > 0.5, 1, 0),
 test_all$diagnosis <- factor(ifelse(test_all$diagnosis > 0.5, 1, 0),
                              labels = c("B", "M"))
 all_confusion <- caret::confusionMatrix(test_all$diagnosis, predict_reg,
-                       mode = 'everything',
-                       positive = 'M')
+                                        mode = 'everything',
+                                        positive = 'M')
 all_r2 <- pR2(logistic_all)["McFadden"]
-
-
-
-
-
-
-
-
 
 
 

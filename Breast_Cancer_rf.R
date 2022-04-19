@@ -44,8 +44,8 @@ rf_all <- randomForest(diagnosis ~., data = train_all,
                        importance = TRUE)
 
 ## testing model, confusion matrix, plots
-cancer_all.pred <- predict(rf_all, newdata = test_all)
-confusionMatrix(cancer_all.pred, test_all$diagnosis,
+cancer_all_rf.pred <- predict(rf_all, newdata = test_all)
+confusionMatrix(cancer_all_rf.pred, test_all$diagnosis,
                 mode = 'everything',
                 positive = 'M')
 varImpPlot(rf_all, main = "Variable Importance: All Cancer Data")
@@ -85,8 +85,8 @@ rf_mean <- randomForest(diagnosis ~., data = train_mean,
                        importance = TRUE)
 
 ## testing model, confusion matrix, plots
-cancer_mean.pred <- predict(rf_mean, newdata = test_mean)
-confusionMatrix(cancer_mean.pred, test_mean$diagnosis,
+cancer_mean_rf.pred <- predict(rf_mean, newdata = test_mean)
+confusionMatrix(cancer_mean_rf.pred, test_mean$diagnosis,
                 mode = 'everything',
                 positive = 'M')
 varImpPlot(rf_mean, main = "Variable Importance: Mean Cancer Data")
@@ -128,8 +128,8 @@ rf_worst <- randomForest(diagnosis ~., data = train_worst,
                          importance = TRUE)
 
 ## testing model, confusion matrix, plots
-cancer_worst.pred <- predict(rf_worst, newdata = test_worst)
-confusionMatrix(cancer_worst.pred, test_worst$diagnosis,
+cancer_worst_rf.pred <- predict(rf_worst, newdata = test_worst)
+confusionMatrix(cancer_worst_rf.pred, test_worst$diagnosis,
                 mode = 'everything',
                 positive = 'M')
 
